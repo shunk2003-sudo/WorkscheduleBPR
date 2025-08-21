@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>勤怠管理アプリ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* スマホ用のCSS */
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px; /* 最大幅を設定 */
+            margin: 0 auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #login-section {
+            margin-bottom: 20px;
+        }
+
+        #login-section input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        #attendance-section {
+            display: none;
+        }
+
+        #attendance-section h2 {
+            text-align: center;
+        }
+
+        #attendance-section button {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .file-input-button {
+            display: inline-block;
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        #show-all-data-button {
+            float: right;
+            padding: 10px 15px;
+            font-size: 14px;
+        }
+
+        #log {
+            margin-top: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .thumbnail {
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .overlay img {
+            max-width: 80%;
+            max-height: 80%;
+        }
+        /* チェックボックスとラベルの配置 */
+        .auto-login-container {
+            margin-bottom: 10px;
+            text-align: left; /* 左寄せ */
+        }
+
+        .auto-login-container input[type="checkbox"] {
+            margin-right: 0; /* チェックボックス右側のマージンを削除 */
+            margin-bottom: 3px; /* チェックボックスとテキストの間隔 */
+        }
+
+        .auto-login-container label {
+            display: block; /* ラベルをブロック要素にする */
+            font-size: 0.8em; /* フォントサイズを小さく */
+            text-align: center; /* テキストを中央寄せ */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>勤怠管理</h1>
+        <div id="login-section">
+            <input type="text" id="name" placeholder="名前">
+            <input type="password" id="password" placeholder="パスワード">
+            <div class="auto-login-container">
+                <input type="checkbox" id="autoLogin">
+                <label for="autoLogin">自動ログイン</label>
+            </div>
+            <button onclick="login()">ログイン</button>
+        </div>
+        <div id="attendance-section">
+            <h2><span id="user-name"></span>さん</h2>
+            <button onclick="recordAttendance('出社')">出社</button>
+            <button onclick="recordAttendance('積込開始')">積込開始</button>
+            <button onclick="recordAttendance('荷降ろし終了')">荷降ろし終了</button>
+            <button onclick="recordAttendance('退社')">退社</button>
+            <label for="photo" class="file-input-button">写真を選択</label>
+            <input type="file" id="photo" accept="image/*" onchange="previewPhoto(this)" style="display:none;">
+            <div id="photo-preview"></div>
+            <div id="status"></div>
+            <button id="show-all-data-button" onclick="showAllData()">一覧表示</button>
+            <button onclick="logout()" style = "float:left;">ログアウト</button>
+        </div>
+        <div id="log"></div>
+
+        <div id="all-data" style="display:none;">
+            <h2>勤怠データ一覧</h2>
+            <table id="data-table">
+                <thead>
+                    <tr>
+                        <th>日時</th>
+                        <th>名前</th>
+                        <th>種別</th>
+                        <th>写真</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button onclick="hideAllData()">閉じる</button>
+        </div>
+
+        <div class="overlay" id="overlay">
+            <img src="" id="overlay-image">
+        </div>
+    </div>
+
+    <script>
+        let userName = '';
+        let currentPhoto = '';
+        let isLoggedIn = false;
+        const correctPassword = '88888'; // パスワードを設定
+
+        // 初期状態では一覧表示ボタンと一覧を非表示にする
+        document.getElementById('show-all-data-button').style.display = 'none';
+
+        // DOMContentLoadedイベントが発生したら自動ログイン処理を実行
+        document.addEventListener('DOMContentLoaded', function() {
+            // キャッシュから名前とパスワードを読み込む
+            const cachedName = localStorage.getItem('userName');
+            const cachedPassword = localStorage.getItem('password');
+            const autoLoginChecked = localStorage.getItem('autoLoginChecked') === 'true'; // 文字列で保存されているため
+
+            if (cachedName && cachedPassword && autoLoginChecked) {
+                document.getElementById('name').value = cachedName;
+                // パスワードを自動入力する場合は、セキュリティリスクを考慮してください
+                document.getElementById('password').value = cachedPassword;
+                login(); // 自動ログイン
+            } else {
+                document.getElementById('login-section').style.display = 'block'; // ログインフォームを表示
+                document.getElementById('attendance-section').style.display = 'none'; // 勤怠セクションを非表示
+            }
+        });
+
+        function login() {
+            const name = document.getElementById('name').value;
+            const password = document.getElementById('password').value;
+            const autoLogin = document.getElementById('autoLogin').checked;
+
+            if (password === correctPassword) {
+                userName = name;
+                if (autoLogin) {
+                    localStorage.setItem('userName', userName); // 名前をキャッシュに保存
+                    localStorage.setItem('password', password); // パスワードをキャッシュに保存 (セキュリティリスク!)
+                    localStorage.setItem('autoLoginChecked', 'true');
+                } else {
+                    localStorage.removeItem('userName');
+                    localStorage.removeItem('password');
+                    localStorage.removeItem('autoLoginChecked');
+                }
+                document.getElementById('user-name').innerText = userName;
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('attendance-section').style.display = 'block';
+                document.getElementById('show-all-data-button').style.display = 'inline-block';
+                isLoggedIn = true;
+            } else {
+                alert('パスワードが違います。');
+            }
+        }
+
+        function logout() {
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('attendance-section').style.display = 'none';
+            document.getElementById('show-all-data-button').style.display = 'none';
+            document.getElementById('all-data').style.display = 'none';
+            userName = '';
+            currentPhoto = '';
+            isLoggedIn = false;
+             localStorage.removeItem('userName');
+             localStorage.removeItem('password');
+             localStorage.removeItem('autoLoginChecked');
+        }
+
+        function previewPhoto(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    currentPhoto = e.target.result;
+                    document.getElementById('photo-preview').innerHTML = `<img src="${currentPhoto}" style="max-width: 100px; max-height: 100px;">`;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function recordAttendance(type) {
+            const now = new Date();
+            const time = now.toLocaleTimeString();
+            const date = now.toLocaleDateString();
+            const logEntry = `${date} ${time} ${userName} ${type}`;
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML = `<p>${logEntry}</p>` + logDiv.innerHTML;
+            document.getElementById('status').innerText = `${type}時刻: ${time}`;
+
+            let logs = localStorage.getItem('attendanceLogs');
+            logs = logs ? JSON.parse(logs) : [];
+            logs.push({ date: date, time: time, name: userName, type: type, photo: currentPhoto });
+            localStorage.setItem('attendanceLogs', JSON.stringify(logs));
+
+            currentPhoto = '';
+            document.getElementById('photo-preview').innerHTML = '';
+            document.getElementById('photo').value = '';
+        }
+
+        function showAllData() {
+            if (!isLoggedIn) {
+                alert('ログインしてください。');
+                return;
+            }
+
+            let logs = localStorage.getItem('attendanceLogs');
+            logs = logs ? JSON.parse(logs) : [];
+
+            const tableBody = document.querySelector('#data-table tbody');
+            tableBody.innerHTML = '';
+
+            // 日時で降順にソート (新しいものが一番上)
+            logs.sort((a, b) => {
+                const dateA = new Date(a.date + ' ' + a.time);
+                const dateB = new Date(b.date + ' ' + b.time);
+                return dateB - dateA;
+            });
+
+            logs.forEach(log => {
+                let row = tableBody.insertRow();
+                let dateTimeCell = row.insertCell();
+                let nameCell = row.insertCell();
+                let typeCell = row.insertCell();
+                let photoCell = row.insertCell();
+
+                dateTimeCell.innerText = `${log.date} ${log.time}`;
+                nameCell.innerText = log.name;
+                typeCell.innerText = log.type;
+
+                if (log.photo) {
+                    photoCell.innerHTML = `<img src="${log.photo}" class="thumbnail" onclick="showOverlay('${log.photo}')">`;
+                } else {
+                    photoCell.innerText = '写真なし';
+                }
+            });
+
+            document.getElementById('all-data').style.display = 'block';
+        }
+
+        function hideAllData() {
+            document.getElementById('all-data').style.display = 'none';
+        }
+
+        function showOverlay(imageUrl) {
+            const overlay = document.getElementById('overlay');
+            const overlayImage = document.getElementById('overlay-image');
+
+            overlayImage.src = imageUrl;
+            overlay.style.display = 'flex';
+
+            overlay.onclick = function() {
+                overlay.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
